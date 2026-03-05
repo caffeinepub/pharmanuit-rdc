@@ -617,17 +617,18 @@ export function AdminPage() {
 
   useEffect(() => {
     if (!identity && !isFetching) {
-      navigate({ to: "/login" });
+      navigate({ to: "/" });
     }
   }, [identity, isFetching, navigate]);
 
   useEffect(() => {
-    if (profile && profile.role !== UserRole.admin) {
-      if (profile.role === UserRole.pharmacy) {
-        navigate({ to: "/pharmacie-dashboard" });
-      } else {
-        navigate({ to: "/" });
-      }
+    if (
+      profile !== undefined &&
+      profile !== null &&
+      profile.role !== UserRole.admin
+    ) {
+      // Non-admin users are sent back to home — no admin route hint given
+      navigate({ to: "/" });
     }
   }, [profile, navigate]);
 
