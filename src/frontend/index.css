@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* Green/white pharmacy palette — OKLCH raw L C H */
+    --background: 0.99 0.003 120;
+    --foreground: 0.18 0.02 150;
+
+    --card: 1 0 0;
+    --card-foreground: 0.18 0.02 150;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.18 0.02 150;
+
+    /* Primary: deep medical green */
+    --primary: 0.38 0.12 155;
+    --primary-foreground: 0.99 0 0;
+
+    /* Secondary: light green tint */
+    --secondary: 0.94 0.04 145;
+    --secondary-foreground: 0.28 0.1 155;
+
+    --muted: 0.95 0.015 140;
+    --muted-foreground: 0.48 0.04 145;
+
+    --accent: 0.9 0.08 145;
+    --accent-foreground: 0.28 0.1 155;
+
+    /* Destructive: clear red */
+    --destructive: 0.55 0.22 27;
+    --destructive-foreground: 0.99 0 0;
+
+    /* Success green badge */
+    --success: 0.52 0.18 145;
+    --success-foreground: 0.99 0 0;
+
+    /* Warning amber */
+    --warning: 0.72 0.16 68;
+    --warning-foreground: 0.18 0.04 80;
+
+    --border: 0.88 0.025 145;
+    --input: 0.92 0.02 145;
+    --ring: 0.38 0.12 155;
+
+    --chart-1: 0.52 0.18 145;
+    --chart-2: 0.6 0.14 200;
+    --chart-3: 0.72 0.16 68;
+    --chart-4: 0.55 0.22 27;
+    --chart-5: 0.65 0.12 300;
+
+    --sidebar: 0.38 0.12 155;
+    --sidebar-foreground: 0.99 0 0;
+    --sidebar-primary: 0.99 0 0;
+    --sidebar-primary-foreground: 0.38 0.12 155;
+    --sidebar-accent: 0.45 0.14 155;
+    --sidebar-accent-foreground: 0.99 0 0;
+    --sidebar-border: 0.45 0.1 155;
+    --sidebar-ring: 0.99 0 0;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Touch targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Remove focus ring on touch, keep for keyboard */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid oklch(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .pharma-header {
+    background: oklch(var(--primary));
+    color: oklch(var(--primary-foreground));
+  }
+
+  .badge-ouvert {
+    background: oklch(0.52 0.18 145);
+    color: white;
+  }
+
+  .badge-ferme {
+    background: oklch(0.55 0.22 27);
+    color: white;
+  }
+
+  .badge-valide {
+    background: oklch(0.52 0.18 145 / 0.15);
+    color: oklch(0.36 0.12 155);
+    border: 1px solid oklch(0.52 0.18 145 / 0.3);
+  }
+
+  .badge-attente {
+    background: oklch(0.72 0.16 68 / 0.15);
+    color: oklch(0.5 0.12 68);
+    border: 1px solid oklch(0.72 0.16 68 / 0.3);
+  }
+
+  .badge-suspendu {
+    background: oklch(0.55 0.22 27 / 0.15);
+    color: oklch(0.45 0.18 27);
+    border: 1px solid oklch(0.55 0.22 27 / 0.3);
+  }
+
+  .action-btn {
+    @apply flex items-center justify-center gap-2 w-full rounded-lg font-semibold transition-colors;
+    min-height: 52px;
+    font-size: 1rem;
+  }
+
+  .pharmacy-card {
+    @apply bg-card border border-border rounded-lg p-4 active:bg-accent transition-colors cursor-pointer;
+    min-height: 80px;
+  }
+}
