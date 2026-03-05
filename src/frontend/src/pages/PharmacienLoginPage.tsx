@@ -1,13 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { UserRole } from "../backend.d";
 import { Layout } from "../components/Layout";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
-export function LoginPage() {
+export function PharmacienLoginPage() {
   const navigate = useNavigate();
   const {
     login,
@@ -20,58 +19,53 @@ export function LoginPage() {
   const { actor, isFetching } = useActor();
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showAdminSetup, setShowAdminSetup] = useState(false);
-  const [isActivatingAdmin, setIsActivatingAdmin] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
 
-  // After identity loaded (on page load OR after login), get profile and redirect
+  // After identity loaded, get profile and redirect based on role
   useEffect(() => {
     if (!identity || !actor || isFetching) return;
-    if (showAdminSetup) return;
     if (isRedirecting) return;
     if (hasChecked) return;
 
     setHasChecked(true);
     setIsRedirecting(true);
+
     actor
       .getCallerUserProfile()
       .then((profile) => {
         if (!profile) {
-          setShowAdminSetup(true);
+          // No profile = not registered as pharmacy
+          setErrorMsg(
+            "Aucun compte pharmacie trouvé. Veuillez créer un compte ou contacter l'administrateur.",
+          );
           setIsRedirecting(false);
           return;
         }
         if (profile.role === UserRole.admin) {
+          // Admin logged in via pharmacist portal — silently redirect
           navigate({ to: "/admin" });
         } else if (profile.role === UserRole.pharmacy) {
           navigate({ to: "/pharmacie-dashboard" });
         } else {
-          setShowAdminSetup(true);
+          // Regular user — not allowed here
+          setErrorMsg(
+            "Accès réservé aux pharmacies. Vous n'avez pas les droits nécessaires.",
+          );
           setIsRedirecting(false);
         }
       })
       .catch(() => {
-        setShowAdminSetup(true);
+        setErrorMsg("Erreur lors de la connexion. Veuillez réessayer.");
         setIsRedirecting(false);
       });
-  }, [
-    identity,
-    actor,
-    isFetching,
-    navigate,
-    isRedirecting,
-    showAdminSetup,
-    hasChecked,
-  ]);
+  }, [identity, actor, isFetching, navigate, isRedirecting, hasChecked]);
 
   useEffect(() => {
     if (isLoginError && loginError) {
-      // If already authenticated, ignore the error and trigger profile redirect
       if (
         loginError.message?.toLowerCase().includes("already authenticated") ||
         loginError.message?.toLowerCase().includes("already logged in")
       ) {
-        // User is already logged in — the other useEffect will handle redirect
         return;
       }
       setErrorMsg(loginError.message || "Erreur de connexion");
@@ -80,27 +74,12 @@ export function LoginPage() {
 
   const handleLogin = () => {
     setErrorMsg(null);
-    setShowAdminSetup(false);
     setHasChecked(false);
     login();
   };
 
-  const handleActivateAdmin = async () => {
-    if (!actor) return;
-    setIsActivatingAdmin(true);
-    try {
-      await actor.initAdmin();
-      toast.success("Accès administrateur activé !");
-      navigate({ to: "/admin" });
-    } catch {
-      toast.error("Erreur lors de l'activation. Réessayez.");
-    } finally {
-      setIsActivatingAdmin(false);
-    }
-  };
-
   return (
-    <Layout title="Connexion" showBack backTo="/">
+    <Layout title="Espace Pharmacien" showBack backTo="/">
       <div className="px-4 py-8 max-w-sm mx-auto space-y-6">
         <div className="text-center space-y-1">
           <div className="w-16 h-16 mx-auto bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
@@ -116,84 +95,43 @@ export function LoginPage() {
               className="text-primary"
               aria-hidden="true"
             >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="M9 12l2 2 4-4" />
             </svg>
           </div>
           <h2 className="text-xl font-bold text-foreground">
-            Espace pharmacie / admin
+            Espace Pharmacien
           </h2>
           <p className="text-sm text-muted-foreground">
-            Connectez-vous pour accéder à votre tableau de bord
+            Connectez-vous pour accéder à votre tableau de bord pharmacie
           </p>
         </div>
 
         {errorMsg && (
           <div
             className="bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive"
-            data-ocid="login.error_state"
+            data-ocid="pharmacien-login.error_state"
           >
             {errorMsg}
           </div>
         )}
 
-        {(isRedirecting || (identity && isFetching && !showAdminSetup)) && (
+        {(isRedirecting || (identity && isFetching && !errorMsg)) && (
           <div
             className="bg-secondary rounded-lg px-4 py-3 text-sm text-muted-foreground text-center"
-            data-ocid="login.loading_state"
+            data-ocid="pharmacien-login.loading_state"
           >
-            Connexion en cours...
+            Vérification en cours...
           </div>
         )}
 
-        {/* Admin setup panel shown after login */}
-        {showAdminSetup && identity && (
-          <div className="space-y-4" data-ocid="login.admin_setup_panel">
-            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-center">
-              <p className="font-bold text-green-800 text-base">
-                Connexion reussie !
-              </p>
-              <p className="text-sm text-green-700 mt-1">
-                Appuyez sur le bouton ci-dessous pour acceder a l'interface
-                administrateur
-              </p>
-            </div>
-            <Button
-              onClick={handleActivateAdmin}
-              disabled={isActivatingAdmin}
-              className="w-full h-16 text-lg font-bold bg-primary text-white"
-              data-ocid="login.activate_admin_button"
-            >
-              {isActivatingAdmin ? (
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="animate-spin"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                  Activation en cours...
-                </span>
-              ) : (
-                "Acceder a l'interface Admin"
-              )}
-            </Button>
-          </div>
-        )}
-
-        {!showAdminSetup && !isRedirecting && (
+        {!isRedirecting && (
           <div className="space-y-4">
             <Button
               onClick={handleLogin}
-              disabled={isLoggingIn || isInitializing}
+              disabled={isLoggingIn || isInitializing || isRedirecting}
               className="w-full h-14 text-base font-semibold bg-primary text-primary-foreground"
-              data-ocid="login.submit_button"
+              data-ocid="pharmacien-login.submit_button"
             >
               {isLoggingIn || isInitializing ? (
                 <span className="flex items-center gap-2">
@@ -236,13 +174,13 @@ export function LoginPage() {
         )}
 
         <div className="text-center text-sm text-muted-foreground pt-2">
-          Vous etes une nouvelle pharmacie ?{" "}
+          Nouvelle pharmacie ?{" "}
           <Link
             to="/inscription"
             className="text-primary font-semibold underline"
-            data-ocid="login.inscription_link"
+            data-ocid="pharmacien-login.inscription_link"
           >
-            Creer un compte
+            Créer un compte
           </Link>
         </div>
       </div>

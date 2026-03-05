@@ -127,19 +127,45 @@ actor {
     };
   };
 
-  public shared ({ caller }) func initAdmin() : async () {
-    if (utilisateurs.isEmpty()) {
-      let admin : Utilisateur = {
-        id = caller;
-        nom = "Admin";
-        email = "admin@pharma.com";
-        motDePasseHash = "admin";
-        role = #admin;
-        statutCompte = #actif;
+  func verifyUserActive(caller : Principal) : Utilisateur {
+    let utilisateur = getUtilisateurOrTrap(caller);
+    switch (utilisateur.statutCompte) {
+      case (#actif) { utilisateur };
+      case (#enAttente) {
+        Runtime.trap("Votre compte n'est pas encore actif");
       };
-      utilisateurs.add(caller, admin);
-      AccessControl.assignRole(accessControlState, caller, caller, #admin);
+      case (#suspendu) {
+        Runtime.trap("Votre compte est suspendu. Veuillez contacter l'administrateur");
+      };
     };
+  };
+
+  func hasAdminUser() : Bool {
+    for ((_, user) in utilisateurs.entries()) {
+      if (user.role == #admin) {
+        return true;
+      };
+    };
+    false;
+  };
+
+  public shared ({ caller }) func initAdmin() : async Text {
+    if (hasAdminUser()) {
+      return "Un administrateur existe déjà";
+    };
+
+    let admin : Utilisateur = {
+      id = caller;
+      nom = "Admin";
+      email = "admin@pharma.com";
+      motDePasseHash = "admin";
+      role = #admin;
+      statutCompte = #actif;
+    };
+    utilisateurs.add(caller, admin);
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+    "Accès administrateur activé";
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -180,7 +206,14 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Non autorisé: Seuls les utilisateurs peuvent sauvegarder leur profil");
     };
-    let utilisateur = getUtilisateurOrTrap(caller);
+    
+    let utilisateur = verifyUserActive(caller);
+
+    // Users cannot change their own role or status - only admin can do that
+    if (profile.role != utilisateur.role or profile.statutCompte != utilisateur.statutCompte) {
+      Runtime.trap("Non autorisé: Vous ne pouvez pas modifier votre rôle ou statut");
+    };
+
     let updatedUtilisateur = {
       id = utilisateur.id;
       nom = profile.nom;
@@ -228,6 +261,12 @@ actor {
     if (utilisateurs.containsKey(caller)) {
       Runtime.trap("Utilisateur déjà existant avec cet id");
     };
+
+    // Users cannot self-assign admin role
+    if (role == #admin) {
+      Runtime.trap("Non autorisé: Vous ne pouvez pas vous attribuer le rôle d'administrateur");
+    };
+
     let statutCompte = if (role == #pharmacy) {
       #enAttente;
     } else {
@@ -243,9 +282,9 @@ actor {
     };
 
     utilisateurs.add(caller, nouvelUtilisateur);
-    
+
     let accessControlRole = mapToAccessControlRole(role);
-    AccessControl.assignRole(accessControlState, caller, caller, accessControlRole);
+    accessControlState.userRoles.add(caller, accessControlRole);
   };
 
   public query ({ caller }) func getUtilisateur() : async Utilisateur {
@@ -377,6 +416,15 @@ actor {
     if (utilisateur.role != #pharmacy) {
       Runtime.trap("Non autorisé: seuls les pharmacies peuvent voir leurs pharmacies");
     };
+    switch (utilisateur.statutCompte) {
+      case (#actif) {};
+      case (#enAttente) {
+        Runtime.trap("Votre compte pharmacie n'est pas encore actif");
+      };
+      case (#suspendu) {
+        Runtime.trap("Votre compte pharmacie est suspendu. Veuillez contacter l'administrateur");
+      };
+    };
     pharmacies.values().toArray().filter(
       func(p) {
         switch (p.ownerId) {
@@ -432,7 +480,19 @@ actor {
   };
 
   public query ({ caller }) func getMesPharmaciesVues(id : PharmacyId) : async Nat {
-    let utilisateur = verifyPharmacyAccess(caller);
+    let utilisateur = getUtilisateurOrTrap(caller);
+    if (utilisateur.role != #pharmacy) {
+      Runtime.trap("Non autorisé: seuls les pharmacies peuvent voir les vues");
+    };
+    switch (utilisateur.statutCompte) {
+      case (#actif) {};
+      case (#enAttente) {
+        Runtime.trap("Votre compte pharmacie n'est pas encore actif");
+      };
+      case (#suspendu) {
+        Runtime.trap("Votre compte pharmacie est suspendu. Veuillez contacter l'administrateur");
+      };
+    };
 
     let pharmacie = pharmacies.get(id);
     switch (pharmacie) {

@@ -2,57 +2,40 @@
 
 ## Current State
 
-Backend Motoko généré avec les modèles User et Pharmacie, les APIs publiques, pharmacy owner et admin. Frontend pas encore construit.
+The app has 3 roles (admin, pharmacy, user) and uses Internet Identity for authentication. The current login flow is broken: a single `/login` route serves both pharmacists and admins, with an "Activate Admin" button visible to anyone who logs in without an existing profile. The admin route `/admin` is accessible by navigating directly. There is no strict role separation at the routing level.
+
+Key issues:
+- The "Espace pharmacie" button on HomePage links to `/login` which shows both admin setup and pharmacy login in the same UI.
+- Any user who logs in without a profile sees the "Activate Admin" button — a major security flaw.
+- No separate, hidden admin entry point.
+- No automatic redirection guards at route level based on role.
 
 ## Requested Changes (Diff)
 
 ### Add
-
-**Backend (Motoko):**
-- Model `User`: id, nom, email, mot_de_passe (hashed), role (user/pharmacy/admin), statut_compte (actif/en_attente/suspendu)
-- Model `Pharmacy`: id, nom_pharmacie, commune, adresse, telephone, horaires, statut_ouvert (Bool), valide_par_admin (Bool), nombre_vues (Nat), user_id (owner link)
-- Auth: register (pharmacy role → statut_compte = en_attente), login (session token), get current user
-- Public queries: list validated pharmacies, get pharmacy detail (+ increment nombre_vues)
-- Pharmacy owner APIs: update horaires/telephone/adresse/statut_ouvert, get own pharmacy stats
-- Admin APIs: list all pharmacies, validate/reject pharmacy (valide_par_admin), list all pharmacy accounts, activate/suspend account (statut_compte), add pharmacy manually
-
-**Frontend (React + TypeScript):**
-- Public page: list of validated pharmacies with nom_pharmacie, commune, statut_ouvert badge
-- Pharmacy detail page: 4 action buttons (Appeler, Voir le numéro, Voir l'adresse, Itinéraire via maps.google.com)
-- Login page (shared, role-based redirect)
-- Pharmacy dashboard: nombre_vues stat, en_attente notice, edit form
-- Admin dashboard (interface cachée):
-  - Liste de toutes les pharmacies avec statut de validation
-  - Valider / refuser / suspendre une pharmacie (valide_par_admin)
-  - Modifier les informations d'une pharmacie (nom, commune, adresse, telephone, horaires, statut_ouvert)
-  - Supprimer une pharmacie
-  - Liste des comptes pharmacie avec statut_compte, activer/suspendre
-  - Ajouter une pharmacie manuellement
-  - Statistiques simples: nombre total de pharmacies, nombre total de vues
-- Page Conditions d'utilisation (route /conditions):
-  - L'application fournit uniquement des informations
-  - Elle ne vend pas de médicaments
-  - Les horaires sont déclarés par les pharmacies elles-mêmes
-  - Chaque utilisateur est responsable de ses déplacements
-  - L'application ne garantit pas la sécurité des lieux
+- `/pharmacien-login` — dedicated login page for pharmacists only (Internet Identity). After login, verifies role === pharmacy and redirects to `/pharmacie-dashboard`. If role === admin, redirects to `/admin` without showing the admin setup button.
+- `/admin-secret` — hidden admin entry point, not linked anywhere in the public UI. Provides Internet Identity login, checks role === admin, redirects to `/admin`. If not admin, shows a generic "access denied" without revealing this is the admin route.
+- `PharmacienLoginPage.tsx` — new component for pharmacist-only login with inscription link.
+- `AdminLoginPage.tsx` — new component for the hidden admin entry point.
 
 ### Modify
-
-Nothing (new project).
+- `HomePage.tsx` — change the "Espace pharmacie" link from `/login` to `/pharmacien-login`. Rename button text to "Espace Pharmacien".
+- `LoginPage.tsx` — repurpose as the pharmacist-only login (rename to `PharmacienLoginPage.tsx`). Remove the admin setup button entirely. If role === admin after login, redirect silently to `/admin` without showing any admin UI.
+- `AdminPage.tsx` — strengthen the role guard: if no identity or role !== admin, redirect to `/` (not `/login`).
+- `PharmacieDashboardPage.tsx` — strengthen the role guard: if role === admin, redirect to `/admin` (not `/login`); if role is user/unknown, redirect to `/`.
+- `App.tsx` — add the two new routes (`/pharmacien-login`, `/admin-secret`), keep existing routes unchanged.
+- `InscriptionPage.tsx` — update backTo from `/login` to `/pharmacien-login`.
 
 ### Remove
-
-Nothing (new project).
+- The "Activer mon accès Administrateur" button from the pharmacist login flow.
+- Any visible link to the admin section from the public or pharmacist UI.
 
 ## Implementation Plan
 
-1. Select `authorization` Caffeine component
-2. Generate Motoko backend with all models, auth, and role-gated APIs
-3. Build frontend:
-   - Public pharmacy list (home)
-   - Pharmacy detail page with action buttons
-   - Login page with role-based redirect
-   - Pharmacy dashboard (edit + stats + en_attente notice)
-   - Admin dashboard (validate pharmacies, manage accounts, add pharmacy)
-4. Mobile-first layout, large buttons, French UI, green/white theme
-5. Deploy
+1. Create `PharmacienLoginPage.tsx`: Internet Identity login, post-login fetches profile, redirects pharmacy → `/pharmacie-dashboard`, admin → `/admin` silently, user/null → shows error "Accès réservé aux pharmacies".
+2. Create `AdminLoginPage.tsx`: Internet Identity login at hidden `/admin-secret` route, post-login fetches profile, redirects admin → `/admin`, non-admin → generic "Accès non autorisé" (no admin reference).
+3. Update `HomePage.tsx`: change link `to="/pharmacien-login"`, label "Espace Pharmacien".
+4. Update `InscriptionPage.tsx`: change backTo to `/pharmacien-login`.
+5. Update `AdminPage.tsx`: redirect to `/` if no identity or role !== admin (remove redirect to `/login`).
+6. Update `PharmacieDashboardPage.tsx`: redirect to `/` if no identity or wrong role (admin goes to `/admin`).
+7. Update `App.tsx`: add routes for `/pharmacien-login` and `/admin-secret`, keep `/login` route pointing to `PharmacienLoginPage` for backwards compatibility.

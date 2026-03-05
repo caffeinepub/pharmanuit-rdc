@@ -228,13 +228,17 @@ export function PharmacieDashboardPage() {
   // Redirect if not authenticated
   useEffect(() => {
     if (!identity && !isFetching) {
-      navigate({ to: "/login" });
+      navigate({ to: "/pharmacien-login" });
     }
   }, [identity, isFetching, navigate]);
 
   // Redirect if not pharmacy role
   useEffect(() => {
-    if (profile && profile.role !== UserRole.pharmacy) {
+    if (
+      profile !== undefined &&
+      profile !== null &&
+      profile.role !== UserRole.pharmacy
+    ) {
       if (profile.role === UserRole.admin) {
         navigate({ to: "/admin" });
       } else {

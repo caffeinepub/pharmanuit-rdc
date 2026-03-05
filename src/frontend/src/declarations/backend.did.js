@@ -78,7 +78,7 @@ export const idlService = IDL.Service({
     ),
   'getUtilisateur' : IDL.Func([], [Utilisateur], ['query']),
   'getUtilisateursPharmacies' : IDL.Func([], [IDL.Vec(Utilisateur)], ['query']),
-  'initAdmin' : IDL.Func([], [], []),
+  'initAdmin' : IDL.Func([], [IDL.Text], []),
   'inscriptionUtilisateur' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, UserRole],
       [],
@@ -172,7 +172,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Utilisateur)],
         ['query'],
       ),
-    'initAdmin' : IDL.Func([], [], []),
+    'initAdmin' : IDL.Func([], [IDL.Text], []),
     'inscriptionUtilisateur' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, UserRole],
         [],

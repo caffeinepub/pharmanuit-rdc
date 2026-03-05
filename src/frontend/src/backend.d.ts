@@ -63,7 +63,7 @@ export interface backendInterface {
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUtilisateur(): Promise<Utilisateur>;
     getUtilisateursPharmacies(): Promise<Array<Utilisateur>>;
-    initAdmin(): Promise<void>;
+    initAdmin(): Promise<string>;
     inscriptionUtilisateur(nom: string, email: string, motDePasse: string, role: UserRole): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
     modifierStatutUtilisateur(userId: Principal, statutCompte: StatutCompte): Promise<void>;

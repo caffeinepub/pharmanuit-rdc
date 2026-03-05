@@ -6,12 +6,14 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ConditionsPage } from "./pages/ConditionsPage";
 import { HomePage } from "./pages/HomePage";
 import { InscriptionPage } from "./pages/InscriptionPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PharmacieDashboardPage } from "./pages/PharmacieDashboardPage";
+import { PharmacienLoginPage } from "./pages/PharmacienLoginPage";
 import { PharmacyDetailPage } from "./pages/PharmacyDetailPage";
 
 // Root route
@@ -67,6 +69,20 @@ const conditionsRoute = createRoute({
   component: ConditionsPage,
 });
 
+// Pharmacist-only login (linked from the public "Espace Pharmacien" button)
+const pharmacienLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pharmacien-login",
+  component: PharmacienLoginPage,
+});
+
+// Hidden admin entry point — not linked anywhere in the public UI
+const adminLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin-secret",
+  component: AdminLoginPage,
+});
+
 // Router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -76,6 +92,8 @@ const routeTree = rootRoute.addChildren([
   pharmacieDashboardRoute,
   adminRoute,
   conditionsRoute,
+  pharmacienLoginRoute,
+  adminLoginRoute,
 ]);
 
 const router = createRouter({ routeTree });

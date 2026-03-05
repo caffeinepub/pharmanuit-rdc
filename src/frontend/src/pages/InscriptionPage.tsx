@@ -40,7 +40,7 @@ export function InscriptionPage() {
 
   if (success) {
     return (
-      <Layout title="Inscription" showBack backTo="/login">
+      <Layout title="Inscription" showBack backTo="/pharmacien-login">
         <div
           className="px-4 py-12 max-w-sm mx-auto text-center space-y-4"
           data-ocid="inscription.success_state"
@@ -79,7 +79,11 @@ export function InscriptionPage() {
   }
 
   return (
-    <Layout title="Créer un compte pharmacie" showBack backTo="/login">
+    <Layout
+      title="Créer un compte pharmacie"
+      showBack
+      backTo="/pharmacien-login"
+    >
       <div className="px-4 py-6 max-w-sm mx-auto space-y-5">
         <div className="bg-warning/10 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-foreground">
           <strong>Note :</strong> Votre compte sera soumis à validation par
@@ -173,7 +177,10 @@ export function InscriptionPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           Déjà inscrit ?{" "}
-          <Link to="/login" className="text-primary font-semibold underline">
+          <Link
+            to="/pharmacien-login"
+            className="text-primary font-semibold underline"
+          >
             Se connecter
           </Link>
         </p>

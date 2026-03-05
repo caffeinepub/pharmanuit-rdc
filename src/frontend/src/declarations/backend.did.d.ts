@@ -67,7 +67,7 @@ export interface _SERVICE {
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUtilisateur' : ActorMethod<[], Utilisateur>,
   'getUtilisateursPharmacies' : ActorMethod<[], Array<Utilisateur>>,
-  'initAdmin' : ActorMethod<[], undefined>,
+  'initAdmin' : ActorMethod<[], string>,
   'inscriptionUtilisateur' : ActorMethod<
     [string, string, string, UserRole],
     undefined

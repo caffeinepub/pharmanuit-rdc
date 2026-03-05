@@ -107,11 +107,11 @@ export function HomePage() {
     <Layout
       rightSlot={
         <Link
-          to="/login"
+          to="/pharmacien-login"
           className="text-white/90 text-sm font-medium hover:text-white transition-colors whitespace-nowrap"
           data-ocid="nav.pharmacie_link"
         >
-          Espace pharmacie
+          Espace Pharmacien
         </Link>
       }
     >

@@ -146,7 +146,7 @@ export interface backendInterface {
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUtilisateur(): Promise<Utilisateur>;
     getUtilisateursPharmacies(): Promise<Array<Utilisateur>>;
-    initAdmin(): Promise<void>;
+    initAdmin(): Promise<string>;
     inscriptionUtilisateur(nom: string, email: string, motDePasse: string, role: UserRole): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
     modifierStatutUtilisateur(userId: Principal, statutCompte: StatutCompte): Promise<void>;
@@ -353,7 +353,7 @@ export class Backend implements backendInterface {
             return from_candid_vec_n19(this._uploadFile, this._downloadFile, result);
         }
     }
-    async initAdmin(): Promise<void> {
+    async initAdmin(): Promise<string> {
         if (this.processError) {
             try {
                 const result = await this.actor.initAdmin();
