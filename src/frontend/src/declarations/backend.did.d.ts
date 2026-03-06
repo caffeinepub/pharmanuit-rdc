@@ -67,6 +67,7 @@ export interface _SERVICE {
   'getMesPharmacies' : ActorMethod<[], Array<Pharmacie>>,
   'getMesPharmaciesVues' : ActorMethod<[PharmacyId], bigint>,
   'getPharmacyById' : ActorMethod<[PharmacyId], [] | [Pharmacie]>,
+  'getTousLesUtilisateurs' : ActorMethod<[], Array<Utilisateur>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUtilisateur' : ActorMethod<[], Utilisateur>,
   'getUtilisateursPharmacies' : ActorMethod<[], Array<Utilisateur>>,

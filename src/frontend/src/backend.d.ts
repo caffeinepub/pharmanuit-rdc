@@ -65,6 +65,7 @@ export interface backendInterface {
     getMesPharmacies(): Promise<Array<Pharmacie>>;
     getMesPharmaciesVues(id: PharmacyId): Promise<bigint>;
     getPharmacyById(id: PharmacyId): Promise<Pharmacie | null>;
+    getTousLesUtilisateurs(): Promise<Array<Utilisateur>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUtilisateur(): Promise<Utilisateur>;
     getUtilisateursPharmacies(): Promise<Array<Utilisateur>>;

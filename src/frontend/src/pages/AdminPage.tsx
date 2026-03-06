@@ -35,12 +35,18 @@ import {
   useAdminPharmacies,
   useAjoutParAdminMutation,
   useCallerProfile,
+  useGetTousLesUtilisateurs,
   useModifierStatutUtilisateurMutation,
   useSupprimerPharmacieMutation,
   useUpdatePharmacieMutation,
-  useUtilisateursPharmacies,
   useValidatePharmacieMutation,
 } from "../hooks/useQueries";
+import {
+  getCallsStatsForAllPharmacies,
+  getCallsThisMonth,
+  getCallsToday,
+  getTotalCalls,
+} from "../utils/callTracking";
 
 // Edit modal form
 function EditPharmacieModal({
@@ -433,17 +439,20 @@ function PharmaciesTab() {
       ) : (
         <div className="space-y-3">
           {pharmacies.map((pharmacy, idx) => (
-            <PharmacyCard
-              key={pharmacy.id.toString()}
-              pharmacy={pharmacy}
-              index={idx + 1}
-              showAdmin
-              onValider={() => handleValider(pharmacy)}
-              onSuspendre={() => handleSuspendre(pharmacy)}
-              onModifier={() => handleModifier(pharmacy)}
-              onSupprimer={() => handleSupprimer(pharmacy)}
-              isPendingAction={isPending}
-            />
+            <div key={pharmacy.id.toString()}>
+              <PharmacyCard
+                pharmacy={pharmacy}
+                index={idx + 1}
+                showAdmin
+                onValider={() => handleValider(pharmacy)}
+                onSuspendre={() => handleSuspendre(pharmacy)}
+                onModifier={() => handleModifier(pharmacy)}
+                onSupprimer={() => handleSupprimer(pharmacy)}
+                isPendingAction={isPending}
+                callsToday={getCallsToday(pharmacy.id)}
+                callsMonth={getCallsThisMonth(pharmacy.id)}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -492,10 +501,95 @@ function PharmaciesTab() {
   );
 }
 
+/** Parse encoded pharmacy registration details from nom field */
+function parsePharmacyNom(nom: string): {
+  nomPharmacie: string;
+  adresse: string;
+  telephone: string;
+  horaires: string;
+} | null {
+  if (!nom.includes("|")) return null;
+  const parts = nom.split("|");
+  if (parts.length < 4) return null;
+  return {
+    nomPharmacie: parts[0],
+    adresse: parts[1],
+    telephone: parts[2],
+    horaires: parts[3],
+  };
+}
+
+/** Collapsible inscription details for pharmacy accounts */
+function PharmacyInscriptionDetails({ nom }: { nom: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const details = parsePharmacyNom(nom);
+  if (!details) return null;
+
+  return (
+    <div className="border-t border-border pt-2 mt-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-primary font-medium hover:text-primary/80 transition-colors"
+        data-ocid="admin.compte.inscription_details_toggle"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`transition-transform ${expanded ? "rotate-90" : ""}`}
+          aria-hidden="true"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        {expanded ? "Masquer les détails" : "Détails de l'inscription"}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-1.5 bg-muted rounded-lg px-3 py-2.5">
+          <p className="text-xs">
+            <span className="text-muted-foreground">Pharmacie :</span>{" "}
+            <span className="font-medium text-foreground">
+              {details.nomPharmacie}
+            </span>
+          </p>
+          <p className="text-xs">
+            <span className="text-muted-foreground">Adresse :</span>{" "}
+            <span className="font-medium text-foreground">
+              {details.adresse}
+            </span>
+          </p>
+          <p className="text-xs">
+            <span className="text-muted-foreground">Téléphone :</span>{" "}
+            <span className="font-medium text-foreground">
+              {details.telephone}
+            </span>
+          </p>
+          <p className="text-xs">
+            <span className="text-muted-foreground">Horaires :</span>{" "}
+            <span className="font-medium text-foreground">
+              {details.horaires}
+            </span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Tab: Comptes
 function ComptesTab() {
-  const { data: utilisateurs = [], isLoading } = useUtilisateursPharmacies();
+  const { data: utilisateurs = [], isLoading } = useGetTousLesUtilisateurs();
   const modifierStatutMutation = useModifierStatutUtilisateurMutation();
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: Principal;
+    nom: string;
+  } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleActiver = async (user: { id: Principal; nom: string }) => {
     try {
@@ -521,6 +615,34 @@ function ComptesTab() {
     }
   };
 
+  const handleRejeter = async (user: { id: Principal; nom: string }) => {
+    try {
+      await modifierStatutMutation.mutateAsync({
+        userId: user.id,
+        statutCompte: StatutCompte.suspendu,
+      });
+      toast.success(`${user.nom} rejeté.`);
+    } catch {
+      toast.error("Erreur lors du rejet.");
+    }
+  };
+
+  const handleConfirmSupprimer = async () => {
+    if (!deleteTarget) return;
+    try {
+      await modifierStatutMutation.mutateAsync({
+        userId: deleteTarget.id,
+        statutCompte: StatutCompte.suspendu,
+      });
+      toast.success("Compte suspendu définitivement.");
+    } catch {
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    }
+  };
+
   if (isLoading) return <SkeletonList count={3} />;
 
   if (utilisateurs.length === 0) {
@@ -529,72 +651,163 @@ function ComptesTab() {
         className="text-center py-10 text-muted-foreground"
         data-ocid="admin.comptes.empty_state"
       >
-        Aucun compte pharmacie enregistré.
+        Aucun compte enregistré.
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {utilisateurs.map((user, idx) => (
-        <div
-          key={user.email}
-          className="bg-card border border-border rounded-lg p-4 space-y-3"
-          data-ocid={`admin.compte.item.${idx + 1}`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground truncate">
-                {user.nom}
-              </p>
-              <p className="text-sm text-muted-foreground truncate">
-                {user.email}
-              </p>
-            </div>
-            <span
-              className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
-                user.statutCompte === StatutCompte.actif
-                  ? "badge-valide"
+      {utilisateurs.map((user, idx) => {
+        const isPharmacy = user.role === UserRole.pharmacy;
+        const isEnAttente = user.statutCompte === StatutCompte.enAttente;
+
+        return (
+          <div
+            key={user.email}
+            className="bg-card border border-border rounded-lg p-4 space-y-3"
+            data-ocid={`admin.compte.item.${idx + 1}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-foreground truncate">
+                    {isPharmacy && user.nom.includes("|")
+                      ? user.nom.split("|")[0]
+                      : user.nom}
+                  </p>
+                  {/* Role badge */}
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                      isPharmacy
+                        ? "bg-primary/10 text-primary border border-primary/20"
+                        : "bg-secondary text-secondary-foreground border border-border"
+                    }`}
+                  >
+                    {isPharmacy ? "Pharmacie" : "Utilisateur"}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">
+                  {user.email}
+                </p>
+              </div>
+              {/* Status badge */}
+              <span
+                className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
+                  user.statutCompte === StatutCompte.actif
+                    ? "badge-valide"
+                    : user.statutCompte === StatutCompte.enAttente
+                      ? "badge-attente"
+                      : "badge-suspendu"
+                }`}
+              >
+                {user.statutCompte === StatutCompte.actif
+                  ? "Actif"
                   : user.statutCompte === StatutCompte.enAttente
-                    ? "badge-attente"
-                    : "badge-suspendu"
-              }`}
+                    ? "En attente"
+                    : "Suspendu"}
+              </span>
+            </div>
+
+            {/* Pharmacy registration details (collapsible) */}
+            {isPharmacy && isEnAttente && (
+              <PharmacyInscriptionDetails nom={user.nom} />
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              {user.statutCompte !== StatutCompte.actif && (
+                <button
+                  type="button"
+                  className="action-btn bg-primary text-primary-foreground text-sm px-4 py-2 flex-1"
+                  style={{ minHeight: 40 }}
+                  onClick={() => handleActiver(user)}
+                  disabled={modifierStatutMutation.isPending}
+                  data-ocid={`admin.compte.activer_button.${idx + 1}`}
+                >
+                  Valider
+                </button>
+              )}
+              {/* Rejeter button — only for pending accounts */}
+              {isEnAttente && (
+                <button
+                  type="button"
+                  className="action-btn bg-warning/20 text-warning-foreground border border-warning/40 text-sm px-4 py-2 flex-1"
+                  style={{ minHeight: 40 }}
+                  onClick={() => handleRejeter(user)}
+                  disabled={modifierStatutMutation.isPending}
+                  data-ocid={`admin.compte.rejeter_button.${idx + 1}`}
+                >
+                  Rejeter
+                </button>
+              )}
+              {user.statutCompte !== StatutCompte.suspendu && (
+                <button
+                  type="button"
+                  className="action-btn bg-destructive text-destructive-foreground text-sm px-4 py-2 flex-1"
+                  style={{ minHeight: 40 }}
+                  onClick={() => handleSuspendre(user)}
+                  disabled={modifierStatutMutation.isPending}
+                  data-ocid={`admin.compte.suspendre_button.${idx + 1}`}
+                >
+                  Suspendre
+                </button>
+              )}
+              {/* Supprimer button */}
+              <button
+                type="button"
+                className="action-btn bg-destructive/10 text-destructive border border-destructive/30 text-sm px-4 py-2 flex-1"
+                style={{ minHeight: 40 }}
+                onClick={() => {
+                  setDeleteTarget(user);
+                  setDeleteOpen(true);
+                }}
+                disabled={modifierStatutMutation.isPending}
+                data-ocid={`admin.compte.delete_button.${idx + 1}`}
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent data-ocid="admin.compte.delete.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce compte ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action suspendra définitivement le compte de{" "}
+              <strong>
+                {deleteTarget?.nom.includes("|")
+                  ? deleteTarget.nom.split("|")[0]
+                  : deleteTarget?.nom}
+              </strong>
+              . Le compte ne sera plus accessible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-ocid="admin.compte.delete.cancel_button"
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteTarget(null);
+              }}
             >
-              {user.statutCompte === StatutCompte.actif
-                ? "Actif"
-                : user.statutCompte === StatutCompte.enAttente
-                  ? "En attente"
-                  : "Suspendu"}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            {user.statutCompte !== StatutCompte.actif && (
-              <button
-                type="button"
-                className="action-btn bg-primary text-primary-foreground text-sm px-4 py-2 flex-1"
-                style={{ minHeight: 40 }}
-                onClick={() => handleActiver(user)}
-                disabled={modifierStatutMutation.isPending}
-                data-ocid={`admin.compte.activer_button.${idx + 1}`}
-              >
-                Activer
-              </button>
-            )}
-            {user.statutCompte !== StatutCompte.suspendu && (
-              <button
-                type="button"
-                className="action-btn bg-destructive text-destructive-foreground text-sm px-4 py-2 flex-1"
-                style={{ minHeight: 40 }}
-                onClick={() => handleSuspendre(user)}
-                disabled={modifierStatutMutation.isPending}
-                data-ocid={`admin.compte.suspendre_button.${idx + 1}`}
-              >
-                Suspendre
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-ocid="admin.compte.delete.confirm_button"
+              onClick={handleConfirmSupprimer}
+              disabled={modifierStatutMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {modifierStatutMutation.isPending
+                ? "Suppression..."
+                : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -614,11 +827,15 @@ function StatistiquesTab() {
       (p) => p.statutPharmacie === StatutPharmacie.suspendue,
     ).length;
     const totalVues = pharmacies.reduce((acc, p) => acc + p.nombreVues, 0n);
+    const totalAppels = getTotalCalls();
+    const callStats = getCallsStatsForAllPharmacies();
     return {
       totalValidees,
       totalEnAttente,
       totalSuspendues,
       totalVues,
+      totalAppels,
+      callStats,
       total: pharmacies.length,
     };
   }, [pharmacies]);
@@ -669,24 +886,98 @@ function StatistiquesTab() {
       color: "bg-secondary border-border",
       textColor: "text-foreground",
     },
+    {
+      label: "Total des appels générés",
+      value: stats.totalAppels,
+      icon: "📞",
+      color: "bg-primary/10 border-primary/20",
+      textColor: "text-primary",
+    },
   ];
 
   return (
-    <div className="space-y-3">
-      {cards.map((card) => (
-        <div
-          key={card.label}
-          className={`${card.color} border rounded-lg px-4 py-4 flex items-center gap-4`}
-        >
-          <span className="text-3xl flex-shrink-0">{card.icon}</span>
-          <div>
-            <p className={`text-2xl font-bold ${card.textColor}`}>
-              {card.value.toString()}
-            </p>
-            <p className="text-sm text-muted-foreground">{card.label}</p>
+    <div className="space-y-4">
+      {/* Stat cards */}
+      <div className="space-y-3">
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            className={`${card.color} border rounded-lg px-4 py-4 flex items-center gap-4`}
+          >
+            <span className="text-3xl flex-shrink-0">{card.icon}</span>
+            <div>
+              <p className={`text-2xl font-bold ${card.textColor}`}>
+                {card.value.toString()}
+              </p>
+              <p className="text-sm text-muted-foreground">{card.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-pharmacy call detail table */}
+      {pharmacies.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="font-semibold text-foreground text-sm pt-2">
+            Détail des appels par pharmacie
+          </h4>
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">
+                      Pharmacie
+                    </th>
+                    <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">
+                      Commune
+                    </th>
+                    <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground">
+                      Vues
+                    </th>
+                    <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground">
+                      Appels/j
+                    </th>
+                    <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground">
+                      Appels/mois
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pharmacies.map((pharmacy, idx) => {
+                    const callStat = stats.callStats.find(
+                      (cs) => cs.pharmacyId === pharmacy.id.toString(),
+                    );
+                    return (
+                      <tr
+                        key={pharmacy.id.toString()}
+                        className={idx % 2 === 0 ? "bg-card" : "bg-muted/30"}
+                        data-ocid={`admin.stats.pharmacy.row.${idx + 1}`}
+                      >
+                        <td className="px-3 py-2 font-medium text-foreground truncate max-w-[120px]">
+                          {pharmacy.nomPharmacie}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {pharmacy.commune}
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {pharmacy.nombreVues.toString()}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold text-primary">
+                          {callStat?.today ?? 0}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold text-foreground">
+                          {callStat?.month ?? 0}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

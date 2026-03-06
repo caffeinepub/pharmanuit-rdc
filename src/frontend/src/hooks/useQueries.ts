@@ -211,6 +211,7 @@ export function useModifierStatutUtilisateurMutation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["utilisateursPharmacies"] });
+      queryClient.invalidateQueries({ queryKey: ["tousLesUtilisateurs"] });
     },
   });
 }
@@ -261,18 +262,15 @@ export function useInscriptionMutation() {
       nom,
       email,
       motDePasse,
+      role = UserRole.pharmacy,
     }: {
       nom: string;
       email: string;
       motDePasse: string;
+      role?: UserRole;
     }) => {
       if (!actor) throw new Error("Acteur non disponible");
-      return actor.inscriptionUtilisateur(
-        nom,
-        email,
-        motDePasse,
-        UserRole.pharmacy,
-      );
+      return actor.inscriptionUtilisateur(nom, email, motDePasse, role);
     },
   });
 }
@@ -302,5 +300,18 @@ export function useSupprimerPharmacieMutation() {
       queryClient.invalidateQueries({ queryKey: ["adminPharmacies"] });
       queryClient.invalidateQueries({ queryKey: ["pharmacies"] });
     },
+  });
+}
+
+export function useGetTousLesUtilisateurs() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Utilisateur[]>({
+    queryKey: ["tousLesUtilisateurs"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getTousLesUtilisateurs();
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: 10_000,
   });
 }

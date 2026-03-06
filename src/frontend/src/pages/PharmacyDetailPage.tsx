@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { Layout } from "../components/Layout";
 import { usePharmacyById } from "../hooks/useQueries";
+import { recordCall } from "../utils/callTracking";
 
 function ActionButton({
   icon,
@@ -154,7 +155,10 @@ export function PharmacyDetailPage() {
         {/* Action buttons */}
         <div className="space-y-3 pt-2">
           <ActionButton
-            href={`tel:${pharmacy.telephone}`}
+            onClick={() => {
+              recordCall(pharmacyId);
+              window.location.href = `tel:${pharmacy.telephone}`;
+            }}
             icon={
               <svg
                 width="22"

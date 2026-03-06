@@ -1,12 +1,15 @@
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { UserRole } from "../backend.d";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { StatutPharmacie } from "../backend.d";
+import type { Pharmacie } from "../backend.d";
 import { Layout } from "../components/Layout";
 import { PharmacyCard } from "../components/PharmacyCard";
 import { SkeletonList } from "../components/SkeletonCard";
 import { useActor } from "../hooks/useActor";
 import { useAllPharmacies } from "../hooks/useQueries";
+import { COMMUNES_COORDS, distanceKm } from "../utils/communes";
 
 const SAMPLE_PHARMACIES = [
   {
@@ -56,11 +59,27 @@ const SAMPLE_PHARMACIES = [
   },
 ];
 
+interface UserCoords {
+  lat: number;
+  lon: number;
+}
+
 export function HomePage() {
   const [search, setSearch] = useState("");
   const [seeded, setSeeded] = useState(false);
   const { data: pharmacies = [], isLoading, refetch } = useAllPharmacies();
   const { actor, isFetching } = useActor();
+
+  // Proximity state
+  const [userCoords, setUserCoords] = useState<UserCoords | null>(null);
+  const [proximityIndex, setProximityIndex] = useState(0);
+  const [proximitySorted, setProximitySorted] = useState<Pharmacie[]>([]);
+  const [geoError, setGeoError] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [proximityActive, setProximityActive] = useState(false);
+
+  // Refs for scrolling to cards
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Seed sample data if empty
   useEffect(() => {
@@ -103,6 +122,106 @@ export function HomePage() {
     );
   }, [pharmacies, search]);
 
+  // Sort validated pharmacies by distance from user
+  function buildProximitySorted(coords: UserCoords): Pharmacie[] {
+    const validated = pharmacies.filter(
+      (p) => p.statutPharmacie === StatutPharmacie.validee,
+    );
+
+    return [...validated].sort((a, b) => {
+      const coordsA = COMMUNES_COORDS[a.commune];
+      const coordsB = COMMUNES_COORDS[b.commune];
+      const distA = coordsA
+        ? distanceKm(coords.lat, coords.lon, coordsA.lat, coordsA.lon)
+        : Number.POSITIVE_INFINITY;
+      const distB = coordsB
+        ? distanceKm(coords.lat, coords.lon, coordsB.lat, coordsB.lon)
+        : Number.POSITIVE_INFINITY;
+      return distA - distB;
+    });
+  }
+
+  // Scroll to the highlighted card
+  function scrollToCard(pharmacyId: string) {
+    setTimeout(() => {
+      const el = cardRefs.current.get(pharmacyId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 50);
+  }
+
+  function handleProximity() {
+    setGeoError("");
+
+    if (!proximityActive || proximitySorted.length === 0) {
+      // First press or not yet active: request geolocation
+      if (userCoords) {
+        // Already have coords — just activate
+        const sorted = buildProximitySorted(userCoords);
+        setProximitySorted(sorted);
+        setProximityIndex(0);
+        setProximityActive(true);
+        if (sorted.length > 0) {
+          scrollToCard(sorted[0].id.toString());
+        }
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        setGeoError(
+          "La géolocalisation n'est pas supportée par ce navigateur.",
+        );
+        return;
+      }
+
+      setGeoLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords: UserCoords = {
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          };
+          setUserCoords(coords);
+          const sorted = buildProximitySorted(coords);
+          setProximitySorted(sorted);
+          setProximityIndex(0);
+          setProximityActive(true);
+          setGeoLoading(false);
+          if (sorted.length > 0) {
+            scrollToCard(sorted[0].id.toString());
+          }
+        },
+        () => {
+          setGeoError(
+            "Activez la localisation pour utiliser cette fonctionnalité.",
+          );
+          setGeoLoading(false);
+        },
+        { timeout: 10000, maximumAge: 60000 },
+      );
+    } else {
+      // Already active: cycle to next pharmacy
+      const nextIndex = (proximityIndex + 1) % proximitySorted.length;
+      setProximityIndex(nextIndex);
+      scrollToCard(proximitySorted[nextIndex].id.toString());
+    }
+  }
+
+  // Current highlighted pharmacy
+  const highlightedPharmacy =
+    proximityActive && proximitySorted.length > 0
+      ? proximitySorted[proximityIndex]
+      : null;
+
+  // Distance of highlighted pharmacy
+  const highlightedDistance = useMemo(() => {
+    if (!highlightedPharmacy || !userCoords) return null;
+    const coords = COMMUNES_COORDS[highlightedPharmacy.commune];
+    if (!coords) return null;
+    return distanceKm(userCoords.lat, userCoords.lon, coords.lat, coords.lon);
+  }, [highlightedPharmacy, userCoords]);
+
   return (
     <Layout
       rightSlot={
@@ -142,6 +261,109 @@ export function HomePage() {
             data-ocid="home.search_input"
             autoComplete="off"
           />
+        </div>
+
+        {/* Proximity button */}
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant={proximityActive ? "default" : "outline"}
+            className={`w-full h-11 gap-2 font-semibold text-sm transition-all ${
+              proximityActive
+                ? "bg-primary text-primary-foreground"
+                : "border-primary text-primary hover:bg-primary/10"
+            }`}
+            onClick={handleProximity}
+            disabled={geoLoading || isLoading}
+            data-ocid="home.proximity_button"
+          >
+            {geoLoading ? (
+              <>
+                <svg
+                  className="animate-spin"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                Localisation en cours…
+              </>
+            ) : (
+              <>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+                {proximityActive
+                  ? `Pharmacie suivante (${proximityIndex + 1}/${proximitySorted.length})`
+                  : "Pharmacies à proximité"}
+              </>
+            )}
+          </Button>
+
+          {geoError && (
+            <p
+              className="text-xs text-destructive flex items-center gap-1 px-1"
+              data-ocid="home.proximity_error_state"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {geoError}
+            </p>
+          )}
+
+          {proximityActive && proximitySorted.length > 0 && !geoError && (
+            <p
+              className="text-xs text-primary flex items-center gap-1 px-1 font-medium"
+              data-ocid="home.proximity_success_state"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+              </svg>
+              {highlightedPharmacy?.nomPharmacie}
+              {highlightedDistance !== null && (
+                <span className="text-muted-foreground font-normal">
+                  &nbsp;— ~
+                  {highlightedDistance < 1
+                    ? "<1"
+                    : Math.round(highlightedDistance)}{" "}
+                  km de vous
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         {/* Info strip */}
@@ -199,10 +421,35 @@ export function HomePage() {
                 key={pharmacy.id.toString()}
                 pharmacy={pharmacy}
                 index={idx + 1}
+                isHighlighted={highlightedPharmacy?.id === pharmacy.id}
+                distanceKm={
+                  highlightedPharmacy?.id === pharmacy.id
+                    ? highlightedDistance
+                    : undefined
+                }
+                cardRef={(el) => {
+                  if (el) {
+                    cardRefs.current.set(pharmacy.id.toString(), el);
+                  } else {
+                    cardRefs.current.delete(pharmacy.id.toString());
+                  }
+                }}
               />
             ))
           )}
         </div>
+
+        {/* Register link for regular users */}
+        <p className="text-center text-xs text-muted-foreground pb-2">
+          Vous souhaitez créer un compte ?{" "}
+          <Link
+            to="/inscription"
+            className="text-primary font-semibold underline"
+            data-ocid="home.register_link"
+          >
+            S'inscrire
+          </Link>
+        </p>
       </div>
     </Layout>
   );

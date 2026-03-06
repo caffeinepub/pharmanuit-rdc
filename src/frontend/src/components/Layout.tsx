@@ -85,15 +85,7 @@ export function Layout({
             </Link>
           </div>
           <div>
-            © {new Date().getFullYear()}. Conçu avec ❤️ via{" "}
-            <a
-              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              caffeine.ai
-            </a>
+            © {new Date().getFullYear()} PharmaNuit RDC. Tous droits réservés.
           </div>
         </div>
       </footer>

@@ -9,9 +9,7 @@ import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Migration "migration";
 
-(with migration = Migration.run)
 actor {
   // Custom Types
   type UserRole = {
@@ -171,24 +169,6 @@ actor {
     };
   };
 
-  func verifyUserActive(caller : Principal) : Utilisateur {
-    // First check AccessControl permission
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Non autorisé: seuls les utilisateurs authentifiés peuvent effectuer cette action");
-    };
-
-    let utilisateur = getUtilisateurOrTrap(caller);
-    switch (utilisateur.statutCompte) {
-      case (#actif) { utilisateur };
-      case (#enAttente) {
-        Runtime.trap("Votre compte n'est pas encore actif");
-      };
-      case (#suspendu) {
-        Runtime.trap("Votre compte est suspendu. Veuillez contacter l'administrateur");
-      };
-    };
-  };
-
   func hasAdminUser() : Bool {
     for ((_, user) in utilisateurs.entries()) {
       if (user.role == #admin) {
@@ -218,9 +198,12 @@ actor {
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    // Check authentication first, but don't trap if user doesn't exist
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Non autorisé: Seuls les utilisateurs peuvent voir leur profil");
     };
+    
+    // Return null if no profile exists (don't trap)
     switch (utilisateurs.get(caller)) {
       case (null) { null };
       case (?util) {
@@ -252,17 +235,21 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    // Check authentication
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Non autorisé: Seuls les utilisateurs peuvent sauvegarder leur profil");
     };
     
-    let utilisateur = verifyUserActive(caller);
+    // Get user (must exist to save profile)
+    let utilisateur = getUtilisateurOrTrap(caller);
 
     // Users cannot change their own role or status - only admin can do that
     if (profile.role != utilisateur.role or profile.statutCompte != utilisateur.statutCompte) {
       Runtime.trap("Non autorisé: Vous ne pouvez pas modifier votre rôle ou statut");
     };
 
+    // Allow profile updates regardless of account status (enAttente, actif, or suspendu)
+    // Users should be able to update their profile information even if not yet validated
     let updatedUtilisateur = {
       id = utilisateur.id;
       nom = profile.nom;
@@ -321,11 +308,8 @@ actor {
       Runtime.trap("Non autorisé: Vous ne pouvez pas vous attribuer le rôle d'administrateur");
     };
 
-    let statutCompte = if (role == #pharmacy) {
-      #enAttente;
-    } else {
-      #actif;
-    };
+    // All new accounts start in #enAttente status
+    let statutCompte = #enAttente;
 
     let nouvelUtilisateur : Utilisateur = {
       id = caller;
@@ -449,6 +433,15 @@ actor {
     };
     utilisateurs.values().toArray().filter(
       func(u) { u.role == #pharmacy }
+    );
+  };
+
+  public query ({ caller }) func getTousLesUtilisateurs() : async [Utilisateur] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Non autorisé: seuls les administrateurs peuvent accéder à tous les utilisateurs");
+    };
+    utilisateurs.values().toArray().filter(
+      func(u) { u.role != #admin }
     );
   };
 

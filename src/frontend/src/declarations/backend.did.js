@@ -76,6 +76,7 @@ export const idlService = IDL.Service({
   'getMesPharmacies' : IDL.Func([], [IDL.Vec(Pharmacie)], ['query']),
   'getMesPharmaciesVues' : IDL.Func([PharmacyId], [IDL.Nat], ['query']),
   'getPharmacyById' : IDL.Func([PharmacyId], [IDL.Opt(Pharmacie)], []),
+  'getTousLesUtilisateurs' : IDL.Func([], [IDL.Vec(Utilisateur)], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -172,6 +173,7 @@ export const idlFactory = ({ IDL }) => {
     'getMesPharmacies' : IDL.Func([], [IDL.Vec(Pharmacie)], ['query']),
     'getMesPharmaciesVues' : IDL.Func([PharmacyId], [IDL.Nat], ['query']),
     'getPharmacyById' : IDL.Func([PharmacyId], [IDL.Opt(Pharmacie)], []),
+    'getTousLesUtilisateurs' : IDL.Func([], [IDL.Vec(Utilisateur)], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
