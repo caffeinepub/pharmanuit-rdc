@@ -19,13 +19,16 @@ export interface Pharmacie {
   'statutOuvert' : boolean,
   'adresse' : string,
   'telephone' : string,
+  'statutPharmacie' : StatutPharmacie,
   'horaires' : string,
-  'valideParAdmin' : boolean,
 }
 export type PharmacyId = bigint;
 export type StatutCompte = { 'actif' : null } |
   { 'suspendu' : null } |
   { 'enAttente' : null };
+export type StatutPharmacie = { 'validee' : null } |
+  { 'enAttente' : null } |
+  { 'suspendue' : null };
 export interface UserProfile {
   'nom' : string,
   'role' : UserRole,
@@ -78,6 +81,7 @@ export interface _SERVICE {
     undefined
   >,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'supprimerPharmacie' : ActorMethod<[PharmacyId], undefined>,
   'updatePharmacieProprietaire' : ActorMethod<
     [PharmacyId, string, string, string, boolean],
     undefined

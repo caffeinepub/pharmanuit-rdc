@@ -9,7 +9,9 @@ import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   // Custom Types
   type UserRole = {
@@ -55,6 +57,34 @@ actor {
     };
   };
 
+  type StatutPharmacie = {
+    #validee;
+    #enAttente;
+    #suspendue;
+  };
+
+  module StatutPharmacie {
+    public func compare(a : StatutPharmacie, b : StatutPharmacie) : Order.Order {
+      switch (a, b) {
+        case (#validee, #validee) { #equal };
+        case (#validee, _) { #less };
+        case (#enAttente, #validee) { #greater };
+        case (#enAttente, #enAttente) { #equal };
+        case (#enAttente, #suspendue) { #less };
+        case (#suspendue, #suspendue) { #equal };
+        case (#suspendue, _) { #greater };
+      };
+    };
+
+    public func toText(status : StatutPharmacie) : Text {
+      switch (status) {
+        case (#validee) { "validée" };
+        case (#enAttente) { "en attente" };
+        case (#suspendue) { "suspendue" };
+      };
+    };
+  };
+
   type Utilisateur = {
     id : Principal;
     nom : Text;
@@ -74,7 +104,7 @@ actor {
     telephone : Text;
     horaires : Text;
     statutOuvert : Bool;
-    valideParAdmin : Bool;
+    statutPharmacie : StatutPharmacie;
     nombreVues : Nat;
     ownerId : ?Principal;
   };
@@ -111,7 +141,21 @@ actor {
     };
   };
 
+  func getPharmacieOrTrap(pharmacyId : PharmacyId) : Pharmacie {
+    switch (pharmacies.get(pharmacyId)) {
+      case (null) {
+        Runtime.trap("Pharmacie non trouvée");
+      };
+      case (?p) { p };
+    };
+  };
+
   func verifyPharmacyAccess(caller : Principal) : Utilisateur {
+    // First check AccessControl permission
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Non autorisé: seuls les utilisateurs authentifiés peuvent effectuer cette action");
+    };
+
     let utilisateur = getUtilisateurOrTrap(caller);
     if (utilisateur.role != #pharmacy) {
       Runtime.trap("Non autorisé: seuls les pharmacies peuvent effectuer cette action");
@@ -128,6 +172,11 @@ actor {
   };
 
   func verifyUserActive(caller : Principal) : Utilisateur {
+    // First check AccessControl permission
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Non autorisé: seuls les utilisateurs authentifiés peuvent effectuer cette action");
+    };
+
     let utilisateur = getUtilisateurOrTrap(caller);
     switch (utilisateur.statutCompte) {
       case (#actif) { utilisateur };
@@ -226,43 +275,48 @@ actor {
   };
 
   public query func getAllPharmacies() : async [Pharmacie] {
-    pharmacies.values().toArray().filter(func(p) { p.valideParAdmin });
+    // Public function - no authorization needed
+    pharmacies.values().toArray().filter(func(p) { p.statutPharmacie == #validee });
   };
 
   public shared func getPharmacyById(id : PharmacyId) : async ?Pharmacie {
-    let result = pharmacies.get(id);
-    let _ = result.map(func(pharmacy) { incrementNombreVues(id) });
-    result;
-  };
-
-  func incrementNombreVues(id : PharmacyId) {
+    // Public function - no authorization needed
+    // Incrémente immédiatement les vues si la pharmacie existe
     let pharmacie = pharmacies.get(id);
     switch (pharmacie) {
-      case (null) {};
+      case (null) { null };
       case (?pharmacie) {
-        let updatedPharmacie = {
-          id = pharmacie.id;
-          nomPharmacie = pharmacie.nomPharmacie;
-          commune = pharmacie.commune;
-          adresse = pharmacie.adresse;
-          telephone = pharmacie.telephone;
-          horaires = pharmacie.horaires;
-          statutOuvert = pharmacie.statutOuvert;
-          valideParAdmin = pharmacie.valideParAdmin;
-          nombreVues = pharmacie.nombreVues + 1;
-          ownerId = pharmacie.ownerId;
-        };
-        pharmacies.add(id, updatedPharmacie);
+        pharmacies.add(
+          id,
+          {
+            id = pharmacie.id;
+            nomPharmacie = pharmacie.nomPharmacie;
+            commune = pharmacie.commune;
+            adresse = pharmacie.adresse;
+            telephone = pharmacie.telephone;
+            horaires = pharmacie.horaires;
+            statutOuvert = pharmacie.statutOuvert;
+            statutPharmacie = pharmacie.statutPharmacie;
+            nombreVues = pharmacie.nombreVues + 1;
+            ownerId = pharmacie.ownerId;
+          },
+        );
+        ?pharmacie;
       };
     };
   };
 
-  public shared ({ caller }) func inscriptionUtilisateur(nom : Text, email : Text, motDePasse : Text, role : UserRole) : async () {
+  public shared ({ caller }) func inscriptionUtilisateur(
+    nom : Text,
+    email : Text,
+    motDePasse : Text,
+    role : UserRole,
+  ) : async () {
+    // Public registration - no prior auth needed, but prevent duplicate registration
     if (utilisateurs.containsKey(caller)) {
       Runtime.trap("Utilisateur déjà existant avec cet id");
     };
 
-    // Users cannot self-assign admin role
     if (role == #admin) {
       Runtime.trap("Non autorisé: Vous ne pouvez pas vous attribuer le rôle d'administrateur");
     };
@@ -272,6 +326,7 @@ actor {
     } else {
       #actif;
     };
+
     let nouvelUtilisateur : Utilisateur = {
       id = caller;
       nom;
@@ -288,6 +343,10 @@ actor {
   };
 
   public query ({ caller }) func getUtilisateur() : async Utilisateur {
+    // User can only get their own data
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Non autorisé: Vous devez être authentifié");
+    };
     getUtilisateurOrTrap(caller);
   };
 
@@ -298,36 +357,33 @@ actor {
     pharmacies.values().toArray();
   };
 
-  public shared ({ caller }) func validatePharmacie(pharmacyId : PharmacyId, validation : Bool) : async () {
+  public shared ({ caller }) func validatePharmacie(
+    pharmacyId : PharmacyId,
+    validation : Bool,
+  ) : async () {
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
       Runtime.trap("Non autorisé: seuls les administrateurs peuvent valider les pharmacies");
     };
-    let pharmacie = pharmacies.get(pharmacyId);
-    switch (pharmacie) {
-      case (null) {
-        Runtime.trap("Pharmacie non trouvée");
-      };
-      case (?pharmacie) {
-        pharmacies.add(
-          pharmacyId,
-          {
-            id = pharmacie.id;
-            nomPharmacie = pharmacie.nomPharmacie;
-            commune = pharmacie.commune;
-            adresse = pharmacie.adresse;
-            telephone = pharmacie.telephone;
-            horaires = pharmacie.horaires;
-            statutOuvert = pharmacie.statutOuvert;
-            valideParAdmin = validation;
-            nombreVues = pharmacie.nombreVues;
-            ownerId = pharmacie.ownerId;
-          },
-        );
-      };
-    };
+
+    validateOrSuspendPharmacie(pharmacyId, validation, true);
   };
 
-  public shared ({ caller }) func modifierStatutUtilisateur(userId : Principal, statutCompte : StatutCompte) : async () {
+  public shared ({ caller }) func supprimerPharmacie(pharmacyId : PharmacyId) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Non autorisé: seuls les administrateurs peuvent supprimer les pharmacies");
+    };
+
+    if (not pharmacies.containsKey(pharmacyId)) {
+      Runtime.trap("Pharmacie non trouvée");
+    };
+
+    pharmacies.remove(pharmacyId);
+  };
+
+  public shared ({ caller }) func modifierStatutUtilisateur(
+    userId : Principal,
+    statutCompte : StatutCompte,
+  ) : async () {
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
       Runtime.trap("Non autorisé: seuls les administrateurs peuvent modifier le statut des utilisateurs");
     };
@@ -362,6 +418,12 @@ actor {
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
       Runtime.trap("Non autorisé: seuls les administrateurs peuvent ajouter des pharmacies");
     };
+    let statutPharmacie = if (valideParAdmin) {
+      #validee;
+    } else {
+      #enAttente;
+    };
+
     let nouvellePharmacie : Pharmacie = {
       id = nextPharmacieId;
       nomPharmacie;
@@ -370,7 +432,7 @@ actor {
       telephone;
       horaires;
       statutOuvert;
-      valideParAdmin;
+      statutPharmacie;
       nombreVues = 0;
       ownerId = null;
     };
@@ -390,7 +452,13 @@ actor {
     );
   };
 
-  public shared ({ caller }) func ajoutParPharmacie(nomPharmacie : Text, commune : Text, adresse : Text, telephone : Text, horaires : Text) : async PharmacyId {
+  public shared ({ caller }) func ajoutParPharmacie(
+    nomPharmacie : Text,
+    commune : Text,
+    adresse : Text,
+    telephone : Text,
+    horaires : Text,
+  ) : async PharmacyId {
     let utilisateur = verifyPharmacyAccess(caller);
 
     let nouvellePharmacie : Pharmacie = {
@@ -401,7 +469,7 @@ actor {
       telephone;
       horaires;
       statutOuvert = false;
-      valideParAdmin = false;
+      statutPharmacie = #enAttente;
       nombreVues = 0;
       ownerId = ?caller;
     };
@@ -412,6 +480,11 @@ actor {
   };
 
   public query ({ caller }) func getMesPharmacies() : async [Pharmacie] {
+    // Verify AccessControl permission first
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Non autorisé: Vous devez être authentifié");
+    };
+
     let utilisateur = getUtilisateurOrTrap(caller);
     if (utilisateur.role != #pharmacy) {
       Runtime.trap("Non autorisé: seuls les pharmacies peuvent voir leurs pharmacies");
@@ -470,7 +543,7 @@ actor {
             telephone;
             horaires;
             statutOuvert;
-            valideParAdmin = pharmacie.valideParAdmin;
+            statutPharmacie = pharmacie.statutPharmacie;
             nombreVues = pharmacie.nombreVues;
             ownerId = pharmacie.ownerId;
           },
@@ -480,6 +553,11 @@ actor {
   };
 
   public query ({ caller }) func getMesPharmaciesVues(id : PharmacyId) : async Nat {
+    // Verify AccessControl permission first
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Non autorisé: Vous devez être authentifié");
+    };
+
     let utilisateur = getUtilisateurOrTrap(caller);
     if (utilisateur.role != #pharmacy) {
       Runtime.trap("Non autorisé: seuls les pharmacies peuvent voir les vues");
@@ -513,5 +591,34 @@ actor {
         };
       };
     };
+  };
+
+  // Nouvelle logique - Valider/Suspendre Pharmacie
+  func validateOrSuspendPharmacie(
+    pharmacyId : PharmacyId,
+    validation : Bool,
+    isAdminAction : Bool,
+  ) {
+    let pharmacie = getPharmacieOrTrap(pharmacyId);
+    let newStatus = if (validation) {
+      #validee;
+    } else {
+      #suspendue;
+    };
+    pharmacies.add(
+      pharmacyId,
+      {
+        id = pharmacie.id;
+        nomPharmacie = pharmacie.nomPharmacie;
+        commune = pharmacie.commune;
+        adresse = pharmacie.adresse;
+        telephone = pharmacie.telephone;
+        horaires = pharmacie.horaires;
+        statutOuvert = pharmacie.statutOuvert;
+        statutPharmacie = newStatus;
+        nombreVues = pharmacie.nombreVues;
+        ownerId = pharmacie.ownerId;
+      },
+    );
   };
 };

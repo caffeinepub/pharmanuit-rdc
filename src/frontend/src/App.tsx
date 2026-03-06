@@ -6,6 +6,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { DisclaimerModal, useDisclaimer } from "./components/DisclaimerModal";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ConditionsPage } from "./pages/ConditionsPage";
@@ -16,14 +17,22 @@ import { PharmacieDashboardPage } from "./pages/PharmacieDashboardPage";
 import { PharmacienLoginPage } from "./pages/PharmacienLoginPage";
 import { PharmacyDetailPage } from "./pages/PharmacyDetailPage";
 
-// Root route
-const rootRoute = createRootRoute({
-  component: () => (
+// Root layout with disclaimer modal
+function RootLayout() {
+  const { accepted, accept } = useDisclaimer();
+
+  return (
     <>
+      {!accepted && <DisclaimerModal onAccept={accept} />}
       <Outlet />
       <Toaster position="top-center" richColors />
     </>
-  ),
+  );
+}
+
+// Root route
+const rootRoute = createRootRoute({
+  component: RootLayout,
 });
 
 // Routes
@@ -79,7 +88,7 @@ const pharmacienLoginRoute = createRoute({
 // Hidden admin entry point — not linked anywhere in the public UI
 const adminLoginRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/admin-secret",
+  path: "/admin-pharmanuit-dashboard",
   component: AdminLoginPage,
 });
 

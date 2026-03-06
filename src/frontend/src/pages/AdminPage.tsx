@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +24,7 @@ import type { Principal } from "@icp-sdk/core/principal";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { StatutCompte, UserRole } from "../backend.d";
+import { StatutCompte, StatutPharmacie, UserRole } from "../backend.d";
 import type { Pharmacie } from "../backend.d";
 import { Layout } from "../components/Layout";
 import { PharmacyCard } from "../components/PharmacyCard";
@@ -26,6 +36,7 @@ import {
   useAjoutParAdminMutation,
   useCallerProfile,
   useModifierStatutUtilisateurMutation,
+  useSupprimerPharmacieMutation,
   useUpdatePharmacieMutation,
   useUtilisateursPharmacies,
   useValidatePharmacieMutation,
@@ -352,10 +363,13 @@ function AddPharmacieForm({ onAdded }: { onAdded: () => void }) {
 function PharmaciesTab() {
   const { data: pharmacies = [], isLoading, refetch } = useAdminPharmacies();
   const validateMutation = useValidatePharmacieMutation();
+  const supprimerMutation = useSupprimerPharmacieMutation();
   const [editingPharmacy, setEditingPharmacy] = useState<Pharmacie | null>(
     null,
   );
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Pharmacie | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleValider = async (pharmacy: Pharmacie) => {
     try {
@@ -383,6 +397,26 @@ function PharmaciesTab() {
     setEditOpen(true);
   };
 
+  const handleSupprimer = (pharmacy: Pharmacie) => {
+    setDeleteTarget(pharmacy);
+    setDeleteOpen(true);
+  };
+
+  const handleConfirmSupprimer = async () => {
+    if (!deleteTarget) return;
+    try {
+      await supprimerMutation.mutateAsync({ id: deleteTarget.id });
+      toast.success(`${deleteTarget.nomPharmacie} supprimée définitivement.`);
+    } catch {
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const isPending = validateMutation.isPending || supprimerMutation.isPending;
+
   return (
     <div className="space-y-4">
       <AddPharmacieForm onAdded={() => refetch()} />
@@ -407,7 +441,8 @@ function PharmaciesTab() {
               onValider={() => handleValider(pharmacy)}
               onSuspendre={() => handleSuspendre(pharmacy)}
               onModifier={() => handleModifier(pharmacy)}
-              isPendingAction={validateMutation.isPending}
+              onSupprimer={() => handleSupprimer(pharmacy)}
+              isPendingAction={isPending}
             />
           ))}
         </div>
@@ -421,6 +456,38 @@ function PharmaciesTab() {
           setEditingPharmacy(null);
         }}
       />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent data-ocid="admin.delete.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette pharmacie ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. La pharmacie{" "}
+              <strong>{deleteTarget?.nomPharmacie}</strong> sera définitivement
+              supprimée de l'application.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-ocid="admin.delete.cancel_button"
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteTarget(null);
+              }}
+            >
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-ocid="admin.delete.confirm_button"
+              onClick={handleConfirmSupprimer}
+              disabled={supprimerMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {supprimerMutation.isPending ? "Suppression..." : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -537,12 +604,20 @@ function StatistiquesTab() {
   const { data: pharmacies = [], isLoading } = useAdminPharmacies();
 
   const stats = useMemo(() => {
-    const totalValidees = pharmacies.filter((p) => p.valideParAdmin).length;
-    const totalEnAttente = pharmacies.filter((p) => !p.valideParAdmin).length;
+    const totalValidees = pharmacies.filter(
+      (p) => p.statutPharmacie === StatutPharmacie.validee,
+    ).length;
+    const totalEnAttente = pharmacies.filter(
+      (p) => p.statutPharmacie === StatutPharmacie.enAttente,
+    ).length;
+    const totalSuspendues = pharmacies.filter(
+      (p) => p.statutPharmacie === StatutPharmacie.suspendue,
+    ).length;
     const totalVues = pharmacies.reduce((acc, p) => acc + p.nombreVues, 0n);
     return {
       totalValidees,
       totalEnAttente,
+      totalSuspendues,
       totalVues,
       total: pharmacies.length,
     };
@@ -579,6 +654,13 @@ function StatistiquesTab() {
       icon: "⏳",
       color: "bg-warning/10 border-warning/20",
       textColor: "text-warning",
+    },
+    {
+      label: "Pharmacies suspendues",
+      value: stats.totalSuspendues,
+      icon: "🚫",
+      color: "bg-destructive/10 border-destructive/20",
+      textColor: "text-destructive",
     },
     {
       label: "Total des vues cumulées",

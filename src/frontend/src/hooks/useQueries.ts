@@ -289,3 +289,18 @@ export function useIsCallerAdmin() {
     staleTime: 60_000,
   });
 }
+
+export function useSupprimerPharmacieMutation() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: PharmacyId }) => {
+      if (!actor) throw new Error("Non connecté");
+      return actor.supprimerPharmacie(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminPharmacies"] });
+      queryClient.invalidateQueries({ queryKey: ["pharmacies"] });
+    },
+  });
+}

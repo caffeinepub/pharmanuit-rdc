@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { Pharmacie } from "../backend.d";
+import { StatutPharmacie } from "../backend.d";
 
 interface PharmacyCardProps {
   pharmacy: Pharmacie;
@@ -8,6 +9,7 @@ interface PharmacyCardProps {
   onValider?: () => void;
   onSuspendre?: () => void;
   onModifier?: () => void;
+  onSupprimer?: () => void;
   isPendingAction?: boolean;
 }
 
@@ -18,11 +20,27 @@ export function PharmacyCard({
   onValider,
   onSuspendre,
   onModifier,
+  onSupprimer,
   isPendingAction = false,
 }: PharmacyCardProps) {
   const ocid = `home.pharmacy.item.${index}`;
 
   if (showAdmin) {
+    const statut = pharmacy.statutPharmacie;
+    const isValidee = statut === StatutPharmacie.validee;
+    const isEnAttente = statut === StatutPharmacie.enAttente;
+    const isSuspendue = statut === StatutPharmacie.suspendue;
+
+    let statusLabel = "En attente";
+    let statusClass = "badge-attente";
+    if (isValidee) {
+      statusLabel = "Validé";
+      statusClass = "badge-valide";
+    } else if (isSuspendue) {
+      statusLabel = "Suspendu";
+      statusClass = "badge-suspendu";
+    }
+
     return (
       <div
         className="bg-card border border-border rounded-lg p-4 space-y-3"
@@ -40,11 +58,9 @@ export function PharmacyCard({
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <span
-              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                pharmacy.valideParAdmin ? "badge-valide" : "badge-attente"
-              }`}
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusClass}`}
             >
-              {pharmacy.valideParAdmin ? "Validé" : "En attente"}
+              {statusLabel}
             </span>
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -60,7 +76,7 @@ export function PharmacyCard({
           {pharmacy.nombreVues === 1n ? "" : "s"}
         </div>
         <div className="flex gap-2 flex-wrap">
-          {!pharmacy.valideParAdmin && (
+          {!isValidee && (
             <button
               type="button"
               className="action-btn bg-primary text-primary-foreground text-sm px-4 py-2 flex-1"
@@ -72,7 +88,7 @@ export function PharmacyCard({
               Valider
             </button>
           )}
-          {pharmacy.valideParAdmin && (
+          {isValidee && (
             <button
               type="button"
               className="action-btn bg-destructive text-destructive-foreground text-sm px-4 py-2 flex-1"
@@ -84,7 +100,7 @@ export function PharmacyCard({
               Suspendre
             </button>
           )}
-          {!pharmacy.valideParAdmin && (
+          {isEnAttente && (
             <button
               type="button"
               className="action-btn bg-destructive/90 text-destructive-foreground text-sm px-4 py-2 flex-1"
@@ -105,6 +121,16 @@ export function PharmacyCard({
             data-ocid={`admin.pharmacy.modifier_button.${index}`}
           >
             Modifier
+          </button>
+          <button
+            type="button"
+            className="action-btn bg-destructive text-destructive-foreground text-sm px-4 py-2 flex-1"
+            style={{ minHeight: 40 }}
+            onClick={onSupprimer}
+            disabled={isPendingAction}
+            data-ocid={`admin.pharmacy.delete_button.${index}`}
+          >
+            Supprimer
           </button>
         </div>
       </div>

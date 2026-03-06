@@ -14,6 +14,11 @@ export const UserRole__1 = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
+export const StatutPharmacie = IDL.Variant({
+  'validee' : IDL.Null,
+  'enAttente' : IDL.Null,
+  'suspendue' : IDL.Null,
+});
 export const Pharmacie = IDL.Record({
   'id' : PharmacyId,
   'ownerId' : IDL.Opt(IDL.Principal),
@@ -23,8 +28,8 @@ export const Pharmacie = IDL.Record({
   'statutOuvert' : IDL.Bool,
   'adresse' : IDL.Text,
   'telephone' : IDL.Text,
+  'statutPharmacie' : StatutPharmacie,
   'horaires' : IDL.Text,
-  'valideParAdmin' : IDL.Bool,
 });
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
@@ -87,6 +92,7 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'modifierStatutUtilisateur' : IDL.Func([IDL.Principal, StatutCompte], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'supprimerPharmacie' : IDL.Func([PharmacyId], [], []),
   'updatePharmacieProprietaire' : IDL.Func(
       [PharmacyId, IDL.Text, IDL.Text, IDL.Text, IDL.Bool],
       [],
@@ -104,6 +110,11 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
+  const StatutPharmacie = IDL.Variant({
+    'validee' : IDL.Null,
+    'enAttente' : IDL.Null,
+    'suspendue' : IDL.Null,
+  });
   const Pharmacie = IDL.Record({
     'id' : PharmacyId,
     'ownerId' : IDL.Opt(IDL.Principal),
@@ -113,8 +124,8 @@ export const idlFactory = ({ IDL }) => {
     'statutOuvert' : IDL.Bool,
     'adresse' : IDL.Text,
     'telephone' : IDL.Text,
+    'statutPharmacie' : StatutPharmacie,
     'horaires' : IDL.Text,
-    'valideParAdmin' : IDL.Bool,
   });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
@@ -185,6 +196,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'supprimerPharmacie' : IDL.Func([PharmacyId], [], []),
     'updatePharmacieProprietaire' : IDL.Func(
         [PharmacyId, IDL.Text, IDL.Text, IDL.Text, IDL.Bool],
         [],

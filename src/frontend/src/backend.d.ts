@@ -25,8 +25,8 @@ export interface Pharmacie {
     statutOuvert: boolean;
     adresse: string;
     telephone: string;
+    statutPharmacie: StatutPharmacie;
     horaires: string;
-    valideParAdmin: boolean;
 }
 export interface UserProfile {
     nom: string;
@@ -38,6 +38,11 @@ export enum StatutCompte {
     actif = "actif",
     suspendu = "suspendu",
     enAttente = "enAttente"
+}
+export enum StatutPharmacie {
+    validee = "validee",
+    enAttente = "enAttente",
+    suspendue = "suspendue"
 }
 export enum UserRole {
     admin = "admin",
@@ -68,6 +73,7 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     modifierStatutUtilisateur(userId: Principal, statutCompte: StatutCompte): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    supprimerPharmacie(pharmacyId: PharmacyId): Promise<void>;
     updatePharmacieProprietaire(id: PharmacyId, horaires: string, telephone: string, adresse: string, statutOuvert: boolean): Promise<void>;
     validatePharmacie(pharmacyId: PharmacyId, validation: boolean): Promise<void>;
 }

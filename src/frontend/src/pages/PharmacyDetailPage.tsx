@@ -87,8 +87,8 @@ export function PharmacyDetailPage() {
     );
   }
 
-  const mapsUrl = `https://maps.google.com?q=${encodeURIComponent(
-    `${pharmacy.adresse} ${pharmacy.commune} RDC`,
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    `${pharmacy.adresse}, ${pharmacy.commune}, RDC`,
   )}`;
 
   return (
